@@ -80,15 +80,7 @@ class InnerNode extends BPlusNode {
     @Override
     public LeafNode get(DataBox key) {
         // TODO(proj2): implement
-        int index = 0;
-        DataBox cur = keys.get(index);
-        while (key.compareTo(cur) >= 0) {
-            index++;
-            if (index == keys.size()) {
-                break;
-            }
-            cur = keys.get(index);
-        }
+        int index = numLessThanEqual(key, keys);
         return getChild(index).get(key);
     }
 
@@ -104,8 +96,28 @@ class InnerNode extends BPlusNode {
     @Override
     public Optional<Pair<DataBox, Long>> put(DataBox key, RecordId rid) {
         // TODO(proj2): implement
-
-        return Optional.empty();
+        int index = numLessThanEqual(key, keys);
+        Optional<Pair<DataBox, Long>> inputPair = getChild(index).put(key, rid);
+        Optional<Pair<DataBox, Long>> outputPair = Optional.empty();
+        if (inputPair.isPresent()) {
+            DataBox inputKey = inputPair.get().getFirst();
+            Long inputRid = inputPair.get().getSecond();
+            while (index < keys.size() && (key.compareTo(keys.get(index)) > 0)) {
+                index++;
+            }
+            keys.add(index, inputKey);
+            children.add(index + 1, inputRid);
+            if (keys.size() > 2 * metadata.getOrder()) {
+                List<DataBox> rightKeys = keys.subList(keys.size() / 2 + 1, keys.size());
+                List<Long> rightChildren = children.subList(children.size() / 2, children.size());
+                keys = keys.subList(0, keys.size() / 2);
+                children = children.subList(0, children.size() / 2);
+                InnerNode rightNode = new InnerNode(metadata, bufferManager, rightKeys, rightChildren, treeContext);
+                outputPair = Optional.of(new Pair<>(keys.get(keys.size() / 2), rightNode.getPage().getPageNum()));
+            }
+        }
+        sync();
+        return outputPair;
     }
 
     // See BPlusNode.bulkLoad.
