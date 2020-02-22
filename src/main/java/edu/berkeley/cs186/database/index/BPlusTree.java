@@ -64,6 +64,7 @@ public class BPlusTree {
     private LockContext lockContext;
 
     // Constructors ////////////////////////////////////////////////////////////
+
     /**
      * Construct a new B+ tree with metadata `metadata` and lock context `lockContext`.
      * `metadata` contains information about the order, partition number,
@@ -91,17 +92,17 @@ public class BPlusTree {
         // Sanity checks.
         if (metadata.getOrder() < 0) {
             String msg = String.format(
-                             "You cannot construct a B+ tree with negative order %d.",
-                             metadata.getOrder());
+                    "You cannot construct a B+ tree with negative order %d.",
+                    metadata.getOrder());
             throw new BPlusTreeException(msg);
         }
 
         int maxOrder = BPlusTree.maxOrder(BufferManager.EFFECTIVE_PAGE_SIZE, metadata.getKeySchema());
         if (metadata.getOrder() > maxOrder) {
             String msg = String.format(
-                             "You cannot construct a B+ tree with order %d greater than the " +
-                             "max order %d.",
-                             metadata.getOrder(), maxOrder);
+                    "You cannot construct a B+ tree with order %d greater than the " +
+                            "max order %d.",
+                    metadata.getOrder(), maxOrder);
             throw new BPlusTreeException(msg);
         }
 
@@ -111,7 +112,7 @@ public class BPlusTree {
 
         if (this.metadata.getRootPageNum() != DiskSpaceManager.INVALID_PAGE_NUM) {
             this.updateRoot(BPlusNode.fromBytes(this.metadata, bufferManager, lockContext,
-                                                this.metadata.getRootPageNum()));
+                    this.metadata.getRootPageNum()));
         } else {
             // Construct the root.
             List<DataBox> keys = new ArrayList<>();
@@ -122,6 +123,7 @@ public class BPlusTree {
     }
 
     // Core API ////////////////////////////////////////////////////////////////
+
     /**
      * Returns the value associated with `key`.
      *
@@ -287,6 +289,7 @@ public class BPlusTree {
     }
 
     // Helpers /////////////////////////////////////////////////////////////////
+
     /**
      * Returns a sexp representation of this tree. See BPlusNode.toSexp for
      * more information.
@@ -311,7 +314,7 @@ public class BPlusTree {
     public String toDot() {
         // TODO(proj4_part2): B+ tree locking
         List<String> strings = new ArrayList<>();
-        strings.add("digraph g {" );
+        strings.add("digraph g {");
         strings.add("  node [shape=record, height=0.1];");
         strings.add(root.toDot());
         strings.add("}");

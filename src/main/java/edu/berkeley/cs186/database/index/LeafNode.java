@@ -10,6 +10,7 @@ import edu.berkeley.cs186.database.databox.DataBox;
 import edu.berkeley.cs186.database.databox.Type;
 import edu.berkeley.cs186.database.memory.BufferManager;
 import edu.berkeley.cs186.database.memory.Page;
+import edu.berkeley.cs186.database.table.Record;
 import edu.berkeley.cs186.database.table.RecordId;
 
 /**
@@ -106,14 +107,15 @@ class LeafNode extends BPlusNode {
     private Optional<Long> rightSibling;
 
     // Constructors //////////////////////////////////////////////////////////////
+
     /**
      * Construct a brand new leaf node.
      */
     LeafNode(BPlusTreeMetadata metadata, BufferManager bufferManager, List<DataBox> keys,
              List<RecordId> rids, Optional<Long> rightSibling, LockContext treeContext) {
         this(metadata, bufferManager, bufferManager.fetchNewPage(treeContext, metadata.getPartNum(), false),
-             keys, rids,
-             rightSibling, treeContext);
+                keys, rids,
+                rightSibling, treeContext);
     }
 
     /**
@@ -122,7 +124,7 @@ class LeafNode extends BPlusNode {
     private LeafNode(BPlusTreeMetadata metadata, BufferManager bufferManager, Page page,
                      List<DataBox> keys,
                      List<RecordId> rids, Optional<Long> rightSibling, LockContext treeContext) {
-        assert(keys.size() == rids.size());
+        assert (keys.size() == rids.size());
 
         this.metadata = metadata;
         this.bufferManager = bufferManager;
@@ -164,7 +166,7 @@ class LeafNode extends BPlusNode {
     // See BPlusNode.bulkLoad.
     @Override
     public Optional<Pair<DataBox, Long>> bulkLoad(Iterator<Pair<DataBox, RecordId>> data,
-            float fillFactor) {
+                                                  float fillFactor) {
         // TODO(proj2): implement
 
         return Optional.empty();
@@ -179,6 +181,7 @@ class LeafNode extends BPlusNode {
     }
 
     // Iterators /////////////////////////////////////////////////////////////////
+
     /** Return the record id associated with `key`. */
     Optional<RecordId> getKey(DataBox key) {
         int index = keys.indexOf(key);
@@ -282,7 +285,7 @@ class LeafNode extends BPlusNode {
     @Override
     public String toString() {
         return String.format("LeafNode(pageNum=%s, keys=%s, rids=%s)",
-                             page.getPageNum(), keys, rids);
+                page.getPageNum(), keys, rids);
     }
 
     @Override
@@ -363,8 +366,24 @@ class LeafNode extends BPlusNode {
     public static LeafNode fromBytes(BPlusTreeMetadata metadata, BufferManager bufferManager,
                                      LockContext treeContext, long pageNum) {
         // TODO(proj2): implement
+        Page page = bufferManager.fetchPage(treeContext, pageNum, false);
+        Buffer buf = page.getBuffer();
 
-        return null;
+        assert (buf.get() == (byte) 1);
+
+        List<DataBox> keys = new ArrayList<>();
+        List<RecordId> rids = new ArrayList<>();
+        long siblingPtr = buf.getLong();
+        Optional<Long> rightSibling = Optional.ofNullable(siblingPtr == -1 ? null : siblingPtr);
+
+        int num = buf.getInt();
+        for (int i = 0; i < num; i++) {
+            keys.add(DataBox.fromBytes(buf, metadata.getKeySchema()));
+            long RecordPageNum = buf.getLong();
+            short entryNum = buf.getShort();
+            rids.add(new RecordId(RecordPageNum, entryNum));
+        }
+        return new LeafNode(metadata, bufferManager, keys, rids, rightSibling, treeContext);
     }
 
     // Builtins //////////////////////////////////////////////////////////////////
@@ -378,9 +397,9 @@ class LeafNode extends BPlusNode {
         }
         LeafNode n = (LeafNode) o;
         return page.getPageNum() == n.page.getPageNum() &&
-               keys.equals(n.keys) &&
-               rids.equals(n.rids) &&
-               rightSibling.equals(n.rightSibling);
+                keys.equals(n.keys) &&
+                rids.equals(n.rids) &&
+                rightSibling.equals(n.rightSibling);
     }
 
     @Override
