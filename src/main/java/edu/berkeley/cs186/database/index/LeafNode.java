@@ -13,6 +13,8 @@ import edu.berkeley.cs186.database.memory.Page;
 import edu.berkeley.cs186.database.table.Record;
 import edu.berkeley.cs186.database.table.RecordId;
 
+import javax.xml.crypto.Data;
+
 /**
  * A leaf of a B+ tree. Every leaf in a B+ tree of order d stores between d and
  * 2d (key, record id) pairs and a pointer to its right sibling (i.e. the page
@@ -158,7 +160,7 @@ class LeafNode extends BPlusNode {
     public Optional<Pair<DataBox, Long>> put(DataBox key, RecordId rid) {
         // TODO(proj2): implement
         if (getKey(key).isPresent()) {
-            throw new BPlusTreeException("Duplicate key");
+            throw new BPlusTreeException("Should not be a duplicate key.");
         }
         int index = 0;
         Optional<Pair<DataBox, Long>> outputPair = Optional.empty();
@@ -167,15 +169,16 @@ class LeafNode extends BPlusNode {
         }
         keys.add(index, key);
         rids.add(index, rid);
-        if (getKeys().size() > 2 * metadata.getOrder()) {
-            List<DataBox> rightKeys = keys.subList(getKeys().size() / 2, keys.size());
-            List<RecordId> rightRids = rids.subList(getKeys().size() / 2, rids.size());
+        if (keys.size() > 2 * metadata.getOrder()) {
+            List<DataBox> rightKeys = keys.subList(keys.size() / 2, keys.size());
+            List<RecordId> rightRids = rids.subList(keys.size() / 2, rids.size());
             LeafNode rightNode = new LeafNode(metadata, bufferManager, rightKeys, rightRids, rightSibling, treeContext);
-            keys = keys.subList(0, getKeys().size() / 2);
-            rids = rids.subList(0, getKeys().size() / 2);
+            keys = keys.subList(0, keys.size() / 2);
+            rids = rids.subList(0, rids.size() / 2);
             Long rightNodePageNum = rightNode.getPage().getPageNum();
             rightSibling = Optional.of(rightNodePageNum);
             outputPair = Optional.of(new Pair<>(rightKeys.get(0), rightNodePageNum));
+            rightNode.sync();
         }
         sync();
         return outputPair;
@@ -186,16 +189,35 @@ class LeafNode extends BPlusNode {
     public Optional<Pair<DataBox, Long>> bulkLoad(Iterator<Pair<DataBox, RecordId>> data,
                                                   float fillFactor) {
         // TODO(proj2): implement
-
-        return Optional.empty();
+        Optional<Pair<DataBox, Long>> outputPair = Optional.empty();
+        int fillSize = (int) (fillFactor * 2 * metadata.getOrder());
+        while (data.hasNext() && keys.size() <= fillSize) {
+            Pair<DataBox, RecordId> datum = data.next();
+            keys.add(datum.getFirst());
+            rids.add(datum.getSecond());
+        }
+        if (keys.size() > fillSize) {
+            List<DataBox> rightKeys = keys.subList(fillSize, keys.size());
+            List<RecordId> rightRids = rids.subList(fillSize, rids.size());
+            keys = keys.subList(0, fillSize);
+            rids = rids.subList(0, fillSize);
+            LeafNode rightNode = new LeafNode(metadata, bufferManager, rightKeys, rightRids, rightSibling, treeContext);
+            Long rightNodePageNum = rightNode.getPage().getPageNum();
+            rightSibling = Optional.of(rightNodePageNum);
+            outputPair = Optional.of(new Pair<>(rightKeys.get(0), rightNodePageNum));
+            rightNode.sync();
+        }
+        sync();
+        return outputPair;
     }
 
     // See BPlusNode.remove.
     @Override
     public void remove(DataBox key) {
         // TODO(proj2): implement
-
-        return;
+        rids.remove(keys.indexOf(key));
+        keys.remove(key);
+        sync();
     }
 
     // Iterators /////////////////////////////////////////////////////////////////
@@ -401,7 +423,7 @@ class LeafNode extends BPlusNode {
             short entryNum = buf.getShort();
             rids.add(new RecordId(RecordPageNum, entryNum));
         }
-        return new LeafNode(metadata, bufferManager, keys, rids, rightSibling, treeContext);
+        return new LeafNode(metadata, bufferManager, page, keys, rids, rightSibling, treeContext);
     }
 
     // Builtins //////////////////////////////////////////////////////////////////

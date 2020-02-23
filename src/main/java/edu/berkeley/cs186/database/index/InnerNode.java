@@ -110,10 +110,11 @@ class InnerNode extends BPlusNode {
             if (keys.size() > 2 * metadata.getOrder()) {
                 List<DataBox> rightKeys = keys.subList(keys.size() / 2 + 1, keys.size());
                 List<Long> rightChildren = children.subList(children.size() / 2, children.size());
-                keys = keys.subList(0, keys.size() / 2);
-                children = children.subList(0, children.size() / 2);
                 InnerNode rightNode = new InnerNode(metadata, bufferManager, rightKeys, rightChildren, treeContext);
                 outputPair = Optional.of(new Pair<>(keys.get(keys.size() / 2), rightNode.getPage().getPageNum()));
+                keys = keys.subList(0, keys.size() / 2);
+                children = children.subList(0, children.size() / 2);
+                rightNode.sync();
             }
         }
         sync();
@@ -125,16 +126,34 @@ class InnerNode extends BPlusNode {
     public Optional<Pair<DataBox, Long>> bulkLoad(Iterator<Pair<DataBox, RecordId>> data,
                                                   float fillFactor) {
         // TODO(proj2): implement
-
-        return Optional.empty();
+        Optional<Pair<DataBox, Long>> outputPair = Optional.empty();
+        int d = metadata.getOrder();
+        while (data.hasNext()) {
+            Optional<Pair<DataBox, Long>> next = getChild(keys.size()).bulkLoad(data, fillFactor);
+            if (next.isPresent()) {
+                keys.add(next.get().getFirst());
+                children.add(next.get().getSecond());
+            }
+            if (keys.size() > 2 * d) {
+                List<DataBox> rightKeys = keys.subList(2 * d, keys.size());
+                List<Long> rightChildren = children.subList(2 * d, children.size());
+                keys = keys.subList(0, 2 * d);
+                children = children.subList(0, 2 * d);
+                InnerNode rightNode = new InnerNode(metadata, bufferManager, rightKeys, rightChildren, treeContext);
+                outputPair = Optional.of(new Pair<>(rightKeys.get(0), rightNode.getPage().getPageNum()));
+                rightNode.sync();
+            }
+        }
+        sync();
+        return outputPair;
     }
 
     // See BPlusNode.remove.
     @Override
     public void remove(DataBox key) {
         // TODO(proj2): implement
-
-        return;
+        get(key).remove(key);
+        sync();
     }
 
     // Helpers ///////////////////////////////////////////////////////////////////

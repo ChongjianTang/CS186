@@ -3,6 +3,7 @@ package edu.berkeley.cs186.database.index;
 import java.io.IOException;
 import java.io.FileWriter;
 import java.io.UncheckedIOException;
+import java.security.Key;
 import java.util.*;
 
 import edu.berkeley.cs186.database.TransactionContext;
@@ -139,9 +140,8 @@ public class BPlusTree {
     public Optional<RecordId> get(DataBox key) {
         typecheck(key);
         // TODO(proj2): implement
+        return root.get(key).getKey(key);
         // TODO(proj4_part2): B+ tree locking
-
-        return Optional.empty();
     }
 
     /**
@@ -194,7 +194,7 @@ public class BPlusTree {
         // TODO(proj2): Return a BPlusTreeIterator.
         // TODO(proj4_part2): B+ tree locking
 
-        return Collections.emptyIterator();
+        return new BPlusTreeIterator();
     }
 
     /**
@@ -225,7 +225,8 @@ public class BPlusTree {
         // TODO(proj2): Return a BPlusTreeIterator.
         // TODO(proj4_part2): B+ tree locking
 
-        return Collections.emptyIterator();
+        LeafNode leafNode = root.get(key);
+        return new BPlusTreeIterator(leafNode, leafNode.scanGreaterEqual(key));
     }
 
     /**
@@ -240,9 +241,17 @@ public class BPlusTree {
     public void put(DataBox key, RecordId rid) {
         typecheck(key);
         // TODO(proj2): implement
+        Optional<Pair<DataBox, Long>> inputPair = root.put(key, rid);
+        if (inputPair.isPresent()) {
+            List<DataBox> rootKeys = new ArrayList<>();
+            rootKeys.add(inputPair.get().getFirst());
+            List<Long> rootChildren = new ArrayList<>();
+            rootChildren.add(root.getPage().getPageNum());
+            rootChildren.add(inputPair.get().getSecond());
+            root = new InnerNode(metadata, bufferManager, rootKeys, rootChildren, lockContext);
+            updateRoot(root);
+        }
         // TODO(proj4_part2): B+ tree locking
-
-        return;
     }
 
     /**
@@ -264,9 +273,22 @@ public class BPlusTree {
      */
     public void bulkLoad(Iterator<Pair<DataBox, RecordId>> data, float fillFactor) {
         // TODO(proj2): implement
+        if (root.getLeftmostLeaf() != root || root.getLeftmostLeaf().getKeys().size() != 0) {
+            throw new BPlusTreeException("Not an empty tree.");
+        }
+        while (data.hasNext()) {
+            Optional<Pair<DataBox, Long>> next = root.bulkLoad(data, fillFactor);
+            if (next.isPresent()) {
+                List<DataBox> rootKeys = new ArrayList<>();
+                rootKeys.add(next.get().getFirst());
+                List<Long> rootChildren = new ArrayList<>();
+                rootChildren.add(root.getPage().getPageNum());
+                rootChildren.add(next.get().getSecond());
+                root = new InnerNode(metadata, bufferManager, rootKeys, rootChildren, lockContext);
+                updateRoot(root);
+            }
+        }
         // TODO(proj4_part2): B+ tree locking
-
-        return;
     }
 
     /**
@@ -283,9 +305,8 @@ public class BPlusTree {
     public void remove(DataBox key) {
         typecheck(key);
         // TODO(proj2): implement
+        root.remove(key);
         // TODO(proj4_part2): B+ tree locking
-
-        return;
     }
 
     // Helpers /////////////////////////////////////////////////////////////////
@@ -388,19 +409,42 @@ public class BPlusTree {
     // Iterator ////////////////////////////////////////////////////////////////
     private class BPlusTreeIterator implements Iterator<RecordId> {
         // TODO(proj2): Add whatever fields and constructors you want here.
+        private Iterator<RecordId> iter;
+        private LeafNode leafNode;
+
+        public BPlusTreeIterator() {
+            leafNode = root.getLeftmostLeaf();
+            iter = leafNode.scanAll();
+        }
+
+        public BPlusTreeIterator(LeafNode leafNode, Iterator<RecordId> iter) {
+            this.leafNode = leafNode;
+            if (iter == null) {
+                this.iter = leafNode.scanAll();
+            } else {
+                this.iter = iter;
+            }
+        }
+
 
         @Override
         public boolean hasNext() {
             // TODO(proj2): implement
-
-            return false;
+            return iter.hasNext() || leafNode.getRightSibling().isPresent();
         }
 
         @Override
         public RecordId next() {
             // TODO(proj2): implement
-
-            throw new NoSuchElementException();
+            if (iter.hasNext()) {
+                return iter.next();
+            } else if (leafNode.getRightSibling().isPresent()) {
+                leafNode = leafNode.getRightSibling().get();
+                iter = leafNode.scanAll();
+                return iter.next();
+            } else {
+                throw new NoSuchElementException();
+            }
         }
     }
 }
