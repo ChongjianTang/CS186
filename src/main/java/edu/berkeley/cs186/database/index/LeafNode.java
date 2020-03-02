@@ -413,8 +413,8 @@ class LeafNode extends BPlusNode {
 
         List<DataBox> keys = new ArrayList<>();
         List<RecordId> rids = new ArrayList<>();
-        long siblingPtr = buf.getLong();
-        Optional<Long> rightSibling = Optional.ofNullable(siblingPtr == -1 ? null : siblingPtr);
+        long siblingPageNum = buf.getLong();
+        Optional<Long> rightSibling = Optional.ofNullable(siblingPageNum == -1 ? null : siblingPageNum);
 
         int num = buf.getInt();
         for (int i = 0; i < num; i++) {

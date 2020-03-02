@@ -47,10 +47,10 @@ public class TestBPlusTree {
     // 3 seconds max per method tested.
     @Rule
     public TestRule globalTimeout = new DisableOnDebug(Timeout.millis((long) (
-                3000 * TimeoutScaling.factor)));
+            3000 * TimeoutScaling.factor)));
 
     @Before
-    public void setup()  {
+    public void setup() {
         DiskSpaceManager diskSpaceManager = new MemoryDiskSpaceManager();
         diskSpaceManager.allocPart(0);
         this.bufferManager = new BufferManagerImpl(diskSpaceManager, new DummyRecoveryManager(), 1024,
@@ -67,7 +67,7 @@ public class TestBPlusTree {
     // Helpers /////////////////////////////////////////////////////////////////
     private void setBPlusTreeMetadata(Type keySchema, int order) {
         this.metadata = new BPlusTreeMetadata("test", "col", keySchema, order,
-                                              0, DiskSpaceManager.INVALID_PAGE_NUM, -1);
+                0, DiskSpaceManager.INVALID_PAGE_NUM, -1);
     }
 
     private BPlusTree getBPlusTree(Type keySchema, int order) {
@@ -90,8 +90,8 @@ public class TestBPlusTree {
         long newIOs = bufferManager.getNumIOs();
         long maxIOs = maxIOsOverride.hasNext() ? maxIOsOverride.next() : MAX_IO_PER_ITER_CREATE;
         assertFalse("too many I/Os used constructing iterator (" + (newIOs - prevIOs) + " > " + maxIOs +
-                    ") - are you materializing more than you need?",
-                    newIOs - prevIOs > maxIOs);
+                        ") - are you materializing more than you need?",
+                newIOs - prevIOs > maxIOs);
 
         List<T> xs = new ArrayList<>();
         while (iter.hasNext()) {
@@ -100,15 +100,15 @@ public class TestBPlusTree {
             newIOs = bufferManager.getNumIOs();
             maxIOs = maxIOsOverride.hasNext() ? maxIOsOverride.next() : MAX_IO_PER_NEXT;
             assertFalse("too many I/Os used per next() call (" + (newIOs - prevIOs) + " > " + maxIOs +
-                        ") - are you materializing more than you need?",
-                        newIOs - prevIOs > maxIOs);
+                            ") - are you materializing more than you need?",
+                    newIOs - prevIOs > maxIOs);
         }
 
         long finalIOs = bufferManager.getNumIOs();
         maxIOs = xs.size() / (2 * metadata.getOrder());
         assertTrue("too few I/Os used overall (" + (finalIOs - initialIOs) + " < " + maxIOs +
-                   ") - are you materializing before the iterator is even constructed?",
-                   (finalIOs - initialIOs) >= maxIOs);
+                        ") - are you materializing before the iterator is even constructed?",
+                (finalIOs - initialIOs) >= maxIOs);
         return xs;
     }
 
@@ -467,5 +467,56 @@ public class TestBPlusTree {
         assertEquals(3, LeafNode.maxOrder(pageSizeInBytes, keySchema));
         assertEquals(3, InnerNode.maxOrder(pageSizeInBytes, keySchema));
         assertEquals(3, BPlusTree.maxOrder(pageSizeInBytes, keySchema));
+    }
+
+    @Test
+    public void testEverythingDeleted() {
+        List<DataBox> keys = new ArrayList<>();
+        List<RecordId> rids = new ArrayList<>();
+        List<RecordId> sortedRids = new ArrayList<>();
+        for (int i = 0; i < 5; ++i) {
+            keys.add(new IntDataBox(i));
+            rids.add(new RecordId(i, (short) i));
+            sortedRids.add(new RecordId(i, (short) i));
+        }
+//        Collections.shuffle(keys, new Random(4396));
+//        Collections.shuffle(rids, new Random(4396));
+
+        BPlusTree tree = getBPlusTree(Type.intType(), 2);
+        for (int i = 0; i < keys.size(); ++i) {
+            tree.put(keys.get(i), rids.get(i));
+        }
+        tree.get(new IntDataBox(0)); // Optional.of(RecordId(0, 0))
+        tree.get(new IntDataBox(1)); // Optional.of(RecordId(1, 1))
+        tree.get(new IntDataBox(2)); // Optional.of(RecordId(2, 2))
+        assertEquals(Optional.empty(), tree.get(new IntDataBox(5)));
+//        for (int i = 0; i < 5; i++) {
+//            tree.remove(new IntDataBox(i));
+//            tree.toDotPDFFile("myTest.pdf");
+//        }
+        tree.remove(new IntDataBox(0));
+        tree.remove(new IntDataBox(1));
+//        tree.remove(new IntDataBox(3));
+        Iterator<RecordId> iter = tree.scanAll();
+        assertTrue(iter.hasNext());
+        assertEquals(tree.get(new IntDataBox(2)), Optional.of(iter.next()));
+        assertEquals(tree.get(new IntDataBox(3)), Optional.of(iter.next()));
+        assertEquals(tree.get(new IntDataBox(4)), Optional.of(iter.next()));
+        assertFalse(iter.hasNext());
+        tree.remove(new IntDataBox(2));
+        tree.remove(new IntDataBox(3));
+        tree.remove(new IntDataBox(4));
+        for (int i = 0; i < keys.size(); ++i) {
+            tree.put(keys.get(i), rids.get(i));
+        }
+        tree.remove(new IntDataBox(2));
+        tree.remove(new IntDataBox(3));
+        tree.remove(new IntDataBox(4));
+        tree.toDotPDFFile("myTest.pdf");
+        iter = tree.scanAll();
+        assertTrue(iter.hasNext());
+        assertEquals(tree.get(new IntDataBox(0)), Optional.of(iter.next()));
+        assertEquals(tree.get(new IntDataBox(1)), Optional.of(iter.next()));
+        assertFalse(iter.hasNext());
     }
 }

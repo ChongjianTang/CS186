@@ -419,18 +419,18 @@ public class BPlusTree {
 
         public BPlusTreeIterator(LeafNode leafNode, Iterator<RecordId> iter) {
             this.leafNode = leafNode;
-            if (iter == null) {
-                this.iter = leafNode.scanAll();
-            } else {
-                this.iter = iter;
-            }
+            this.iter = iter;
         }
 
 
         @Override
         public boolean hasNext() {
             // TODO(proj2): implement
-            return iter.hasNext() || leafNode.getRightSibling().isPresent();
+            while (!iter.hasNext() && leafNode.getRightSibling().isPresent()) {
+                leafNode = leafNode.getRightSibling().get();
+                iter = leafNode.scanAll();
+            }
+            return iter.hasNext();
         }
 
         @Override
